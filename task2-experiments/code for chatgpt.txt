@@ -1,0 +1,337 @@
+import torch
+import sys
+import matplotlib.pyplot as plt
+
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader, ConcatDataset
+from torch.optim import Adam
+from torch.optim.lr_scheduler import StepLR
+import time
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# Experiment configuration
+data_augmentation = False
+batch_size_var = 64
+batch_norm_var = False
+l2 = False
+scheduler_bool = False
+early_stop = False
+
+
+# number of steps for early stopping
+early_stop_thresh = 3
+# number of epochs
+num_epochs = 100
+
+device
+
+# Data augmentation
+
+mean = [0.485, 0.456, 0.406]
+std = [0.229, 0.224, 0.225]
+
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize(mean=mean, std=std)
+])
+
+# Data Loading
+
+trainset = datasets.CIFAR10(root='~/.pytorch/CIFAR10', train=True, download=True, transform=transform)
+testset = datasets.CIFAR10(root='~/.pytorch/CIFAR10', train=False, transform=transform)
+
+train_loader = DataLoader(trainset, batch_size=batch_size_var, shuffle=True)
+test_loader = DataLoader(testset, batch_size=batch_size_var, shuffle=False)
+
+# Data augmentation transformation
+
+augmentation_transform = transforms.Compose([
+    transforms.RandomResizedCrop(32),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=mean, std=std)
+])
+
+# Create a new dataset with augmented images
+
+augmented_dataset = datasets.CIFAR10(root='~/.pytorch/CIFAR10', train=True, download=True, transform=augmentation_transform)
+
+# Concatenate the original trainset with the augmented dataset
+combined_trainset = ConcatDataset([trainset, augmented_dataset])
+
+# Create DataLoader for the combined training set only if we want it
+if data_augmentation:
+    train_loader = DataLoader(combined_trainset, batch_size=batch_size_var, shuffle=True)
+    print("Using data augmentation")
+else:
+    print("No data augmentation")
+
+for images, labels in train_loader:
+    print(images.size(), labels.size())
+    break
+
+# Compare sizes of the original trainset and the augmented combined trainset
+original_trainset_size = len(trainset)
+augmented_trainset_size = len(augmented_dataset)
+combined_trainset_size = len(combined_trainset)
+
+print(f"Original Trainset Size: {original_trainset_size}")
+print(f"Augmented Trainset Size: {augmented_trainset_size}")
+print(f"Combined Trainset Size: {combined_trainset_size}")
+
+# Get a batch of data
+data_iter = iter(train_loader)
+images, labels = next(data_iter)
+
+# Transformation for visualization (undo normalization)
+inv_normalize = transforms.Normalize(
+    mean=[-mean[0] / std[0], -mean[1] / std[1], -mean[2] / std[2]],
+    std=[1 / std[0], 1 / std[1], 1 / std[2]]
+)
+
+
+# Function to display an image
+def show_image(img, title):
+    img = inv_normalize(img)
+    img = torch.clamp(img, 0, 1)  # Clip values to stay within the valid range
+    plt.imshow(img.permute(1, 2, 0))
+    plt.title(title)
+    plt.axis('off')
+    plt.show()
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def checkpoint(model, filename):
+    torch.save(model.state_dict(), filename)
+	
+# Display the first image from the batch
+show_image(images[0], title=f"Label: {labels[0]}")
+
+class CustomCNNCifar(nn.Module):
+    def __init__(self, num_classes=10, batch_norm=True):
+        super(CustomCNNCifar, self).__init__()
+        self.batch_norm = batch_norm
+
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=8, kernel_size=3, stride=2, padding=1, padding_mode='zeros')
+        # 16x16x8
+        if self.batch_norm:
+            self.bn1 = nn.BatchNorm2d(8)
+        self.relu1 = nn.LeakyReLU()
+
+        self.conv2 = nn.Conv2d(in_channels=8, out_channels=16, kernel_size=3, stride=2, padding=1, padding_mode='zeros')
+        # 8x8x16
+        if self.batch_norm:
+            self.bn2 = nn.BatchNorm2d(16)
+        self.relu2 = nn.LeakyReLU()
+
+        self.conv3 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=2, padding=1, padding_mode='zeros')
+        # 4x4x32
+        if self.batch_norm:
+            self.bn3 = nn.BatchNorm2d(32)
+        self.relu3 = nn.LeakyReLU()
+
+        self.conv4 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=2, padding=1, padding_mode='zeros')
+        # 2x2x64
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # 1x1x64
+        if self.batch_norm:
+            self.bn4 = nn.BatchNorm2d(64)
+        self.relu4 = nn.LeakyReLU()
+
+        self.flatten = nn.Flatten()
+
+        self.fc1 = nn.Linear(64, num_classes)
+
+        self.log_softmax = nn.LogSoftmax(dim=1)  # Softmax activation for classification
+
+    def forward(self, x):
+        x = self.conv1(x)
+        if self.batch_norm:
+            x = self.bn1(x)
+        x = self.relu1(x)
+
+        x = self.conv2(x)
+        if self.batch_norm:
+            x = self.bn2(x)
+        x = self.relu2(x)
+
+        x = self.conv3(x)
+        if self.batch_norm:
+            x = self.bn3(x)
+        x = self.relu3(x)
+
+        x = self.conv4(x)
+        if self.batch_norm:
+            x = self.bn4(x)
+        x = self.pool1(x)
+        x = self.relu4(x)
+
+        x = self.flatten(x)
+
+        x = self.fc1(x)
+
+        x = self.log_softmax(x)  # Apply softmax for classification
+        return x
+
+model = CustomCNNCifar(num_classes=10, batch_norm=batch_norm_var)
+if batch_norm_var:
+    print("Using batch norm")
+
+# Calculate the total number of trainable parameters
+total_params_reduced = count_parameters(model)
+print(f"Total trainable parameters in the reduced model: {total_params_reduced}")
+
+print(model.to(device))
+
+
+model = CustomCNNCifar(num_classes=10, batch_norm=batch_norm_var)
+model = model.to(device)
+if l2:
+  optimizer = Adam(model.parameters(), weight_decay=1e-5)  # L2 regularization
+else:
+  optimizer = Adam(model.parameters())
+if scheduler_bool:
+  scheduler = StepLR(optimizer, step_size=30, gamma=0.1)  # Learning rate schedule
+criterion = nn.NLLLoss()
+
+
+cum_epoch_loss = 0
+best_val = sys.maxsize
+start_time = time.time()
+best_val_e = sys.maxsize
+best_epoch = 0
+
+# Initialize lists to track training and validation metrics
+train_losses = []
+val_losses = []
+val_accuracies = []
+
+# Training loop for each epoch
+for e in range(num_epochs):
+    batch_loss = 0
+
+    # Training phase
+    model.train()
+    for batch, (inputs, outputs) in enumerate(train_loader, 1):
+        inputs = inputs.to(device)
+        outputs = outputs.to(device)
+        optimizer.zero_grad()
+        predictions = model(inputs)
+        loss = criterion(predictions, outputs)
+        loss.backward()
+        optimizer.step()
+
+        batch_loss += loss.item()
+
+    # Calculate and store average training loss for the epoch
+    average_train_loss = batch_loss / len(train_loader)
+    train_losses.append(average_train_loss)
+
+    print(f'Epoch({e + 1}/{num_epochs})')
+    print(f'Training loss: {average_train_loss}')
+
+    # Validation phase
+    model.eval()
+    val_loss = 0
+    num_correct_val = 0
+    total_val = 0
+
+    with torch.no_grad():
+        for batch_val, (inputs, outputs) in enumerate(test_loader, 1):
+            inputs = inputs.to(device)
+            outputs = outputs.to(device)
+
+            predictions = model(inputs)
+            loss = criterion(predictions, outputs)
+
+            val_loss += loss.item()
+
+            # Calculate validation accuracy
+            output_probs = torch.exp(predictions)
+            pred = torch.argmax(output_probs, 1)
+            total_val += outputs.size(0)
+            num_correct_val += (pred == outputs).sum().item()
+
+        # Calculate and store average validation loss for the epoch
+        average_val_loss = val_loss / len(test_loader)
+        val_losses.append(average_val_loss)
+
+        # Calculate and store validation accuracy for the epoch
+        val_accuracy = num_correct_val * 100 / total_val
+        val_accuracies.append(val_accuracy)
+
+        print(f'Validation loss: {average_val_loss}')
+        print(f'Validation accuracy: {val_accuracy}%')
+
+        # Best model checkpointing
+        if average_val_loss < best_val:
+            print(f'Checkpointing new best model in epoch {e + 1}')
+            checkpoint(model, "best_model.pkl")
+            best_val = average_val_loss
+
+    # Check val loss of epoch for early stopping
+    if average_val_loss < best_val_e:
+        best_val_e = average_val_loss
+        best_epoch = e
+
+    # Early stopping
+    if early_stop:
+      if e - best_epoch > early_stop_thresh:
+          print(f'Early stopped training at epoch {e + 1}')
+          break  # Terminate the training loop
+
+    if scheduler_bool:
+      scheduler.step()  # Step the learning rate scheduler
+
+print(f'\nFinal, best val error: {best_val}')
+
+end_time = time.time()
+elapsed_time = end_time - start_time
+minutes = int(elapsed_time // 60)
+seconds = int(elapsed_time % 60)
+
+print(f"Elapsed Time: {minutes} minutes and {seconds} seconds")
+
+model.eval()
+with torch.no_grad():
+    num_correct = 0
+    total = 0
+
+    for batch, (images, labels) in enumerate(test_loader, 1):
+        images = images.to(device)  # Move images to the same device as the model
+        labels = labels.to(device)
+
+        logps = model(images)
+        output = torch.exp(logps)
+
+        pred = torch.argmax(output, 1)
+        total += labels.size(0)
+        num_correct += (pred == labels).sum().item()
+
+    print(f'Accuracy of the model on {total} test images: {num_correct * 100 / total}% ')
+	
+	
+# After training
+plt.figure(figsize=(12, 4))
+
+# Plotting training and validation loss
+plt.subplot(1, 2, 1)
+plt.plot(range(1, e + 2), train_losses, label='Training Loss')
+plt.plot(range(1, e + 2), val_losses, label='Validation Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+
+# Plotting validation accuracy
+plt.subplot(1, 2, 2)
+plt.plot(range(1, e + 2), val_accuracies, label='Validation Accuracy', color='orange')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.legend()
+
+plt.tight_layout()
+plt.show()
