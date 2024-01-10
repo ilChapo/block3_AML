@@ -25,3 +25,11 @@ pip install -r requirements.txt
         * `3_Interpretability.ipynb`
         * `4_Transfer_learning.ipynb`
         * `5_Open_project.ipynb`
+
+
+### Results
+* Results of `Task1` are included directly in the executed notebook (`1_Baseline_CNN_CIFAR.ipynb`).
+* Folder `task2-experiments` contain the results requested from `Task2` of the project.
+* Folder `task3-visualizations` contain the results requested from `Task3` of the project.
+* Folder `task4-transfer-learning` contain the results requested from `Task4` of the project.
+* Folder `open-project` contain the results of the open project requested for `Task5`.
