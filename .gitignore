@@ -6,6 +6,7 @@ __pycache__/
 **/conv_layers*/
 
 open_project/ResNet152/best_model_*.pth
+open_project/EUROSatCNN/best_model_*.pth
 open_project/ResNet50/best_model_*.pth
 
 # C extensions
