@@ -10,6 +10,7 @@ open_project/EUROSatCNN/best_model_*.pth
 open_project/ResNet50/best_model_*.pth
 open_project/VGG16/best_model_*.pth
 open_project/VGG19/best_model_*.pth
+open_project/**/best_model_*.pth
 
 # C extensions
 *.so
