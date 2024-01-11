@@ -94,3 +94,7 @@ Train Epoch: 15 [10240/18900 (54%)]	Loss: 0.633219
 Train Epoch: 15 [15360/18900 (81%)]	Loss: 0.568321
 
 Validation set: Average loss: 0.4956, Accuracy: 3369/4050 (83%)
+
+Completed training for 15 epochs 
+
+Total Training Time: 19m 19s 

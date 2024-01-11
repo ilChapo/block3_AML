@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 **/data/
+**/conv_layers*/
+
+open_project/ResNet152/best_model_*.pth
+open_project/ResNet50/best_model_*.pth
 
 # C extensions
 *.so

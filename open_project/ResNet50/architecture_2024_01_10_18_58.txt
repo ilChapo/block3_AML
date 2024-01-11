@@ -186,3 +186,5 @@ Total parameters in the model: 24563274
 Trainable parameters in the model: 1055242
 NON-Trainable parameters in the model: 23508032
 -------------------------------------------------------------------
+-------------------------------------------------------------------
+{'batch_size': 512, 'num_epochs': 15, 'learning_rate': 0.001, 'learning_rate_factor': 0.5, 'weight_decay': 0.001, 'log_interval': 10, 'device': 'cuda', 'num_classes': 10}
