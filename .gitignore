@@ -3,18 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 **/data/
-**/conv_layers*/
-
-open_project/ResNet152/best_model_*.pth
-open_project/EUROSatCNN/best_model_*.pth
-open_project/ResNet50/best_model_*.pth
-open_project/VGG16/best_model_*.pth
-open_project/VGG19/best_model_*.pth
-open_project/**/best_model_*.pth
 
 # C extensions
 *.so
 terrassa/
+paris/
 # Distribution / packaging
 .Python
 build/
